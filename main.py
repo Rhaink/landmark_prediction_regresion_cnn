@@ -694,6 +694,88 @@ def validate_geometric_comprehensive(checkpoint_path):
         return False
 
 
+# ============================================================================
+# EFFICIENTNET COMMANDS
+# ============================================================================
+
+def train_efficientnet(phase: int = None):
+    """
+    Entrenar EfficientNet-B1 con pipeline 4-phase
+
+    Args:
+        phase: Fase específica (1-4) o None para todas
+
+    Returns:
+        True si exitoso
+    """
+    print("\n🚀 Entrenando EfficientNet-B1...")
+
+    if phase is None:
+        # Entrenar todas las fases
+        print("📍 Ejecutando pipeline completo 4-phase")
+        result = os.system("python train_efficientnet_phases.py --all")
+    else:
+        # Entrenar fase específica
+        print(f"📍 Ejecutando Phase {phase}")
+        result = os.system(f"python train_efficientnet_phases.py --phase {phase}")
+
+    return result == 0
+
+
+def evaluate_efficientnet():
+    """
+    Comparar EfficientNet-B1 vs ResNet-18
+
+    Returns:
+        True si exitoso
+    """
+    print("\n📊 Comparando EfficientNet-B1 vs ResNet-18...")
+
+    # Verificar que existan checkpoints
+    efficientnet_checkpoint = "checkpoints/efficientnet/efficientnet_phase4_best.pt"
+    resnet_checkpoint = "checkpoints/geometric_complete.pt"
+
+    if not os.path.exists(efficientnet_checkpoint):
+        print(f"❌ Checkpoint de EfficientNet no encontrado: {efficientnet_checkpoint}")
+        print("   Ejecuta: python main.py train_efficientnet")
+        return False
+
+    if not os.path.exists(resnet_checkpoint):
+        print(f"⚠️  Checkpoint de ResNet no encontrado: {resnet_checkpoint}")
+        print("   Usando checkpoint por defecto si existe...")
+
+    # Ejecutar comparación
+    result = os.system(f"python compare_efficientnet_vs_resnet.py --efficientnet {efficientnet_checkpoint} --resnet {resnet_checkpoint}")
+
+    return result == 0
+
+
+def visualize_efficientnet(checkpoint_path: str = None):
+    """
+    Visualizar predicciones de EfficientNet
+
+    Args:
+        checkpoint_path: Path al checkpoint (opcional)
+
+    Returns:
+        True si exitoso
+    """
+    if checkpoint_path is None:
+        checkpoint_path = "checkpoints/efficientnet/efficientnet_phase4_best.pt"
+
+    print(f"\n🖼️ Visualizando predicciones de EfficientNet...")
+    print(f"   Checkpoint: {checkpoint_path}")
+
+    if not os.path.exists(checkpoint_path):
+        print(f"❌ Checkpoint no encontrado: {checkpoint_path}")
+        return False
+
+    # Usar script de visualización de test complete (compatible con EfficientNet)
+    result = os.system(f"python visualize_complete_test.py --checkpoint {checkpoint_path}")
+
+    return result == 0
+
+
 def main():
     """Función principal"""
     parser = argparse.ArgumentParser(description='Proyecto de regresión de landmarks')
@@ -711,7 +793,7 @@ def main():
         'train_ensemble',  # Entrenar ensemble
         'evaluate_ensemble', # Evaluar ensemble
         'pipeline',        # Ejecutar pipeline completo
-        # Comandos geométricos nuevos
+        # Comandos geométricos ResNet
         'train_geometric_phase1',  # Entrenar con Wing Loss (Fase 1)
         'train_geometric_phase2',  # Entrenar con fine-tuning + Wing Loss (Fase 2)
         'train_geometric_attention',  # Entrenar con Coordinate Attention (Fase 2b)
@@ -721,7 +803,11 @@ def main():
         'train_geometric_complete', # Alias para train_geometric_final
         'evaluate_geometric',      # Evaluar con métricas geométricas
         'analyze_geometric',       # Análizar mejoras geométricas
-        'validate_geometric'       # Validación geométrica exhaustiva
+        'validate_geometric',      # Validación geométrica exhaustiva
+        # Comandos EfficientNet (NUEVOS)
+        'train_efficientnet',      # Entrenar EfficientNet-B1 (pipeline 4-phase completo)
+        'evaluate_efficientnet',   # Comparar EfficientNet vs ResNet estadísticamente
+        'visualize_efficientnet'   # Visualizar predicciones de EfficientNet
     ], help='Comando a ejecutar')
 
     parser.add_argument('--checkpoint', type=str,
@@ -815,6 +901,20 @@ def main():
     elif args.command == 'validate_geometric':
         checkpoint = args.checkpoint or 'checkpoints/geometric_final.pt'
         if not validate_geometric_comprehensive(checkpoint):
+            sys.exit(1)
+
+    # Comandos EfficientNet
+    elif args.command == 'train_efficientnet':
+        if not train_efficientnet():
+            sys.exit(1)
+
+    elif args.command == 'evaluate_efficientnet':
+        if not evaluate_efficientnet():
+            sys.exit(1)
+
+    elif args.command == 'visualize_efficientnet':
+        checkpoint = args.checkpoint or 'checkpoints/efficientnet/efficientnet_phase4_best.pt'
+        if not visualize_efficientnet(checkpoint):
             sys.exit(1)
 
     print("\n✅ Comando ejecutado exitosamente!")
