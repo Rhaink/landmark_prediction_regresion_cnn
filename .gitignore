@@ -30,13 +30,13 @@ ENV/
 env/
 .env
 
-# PyTorch
+# PyTorch checkpoints (too large for GitHub, can be regenerated)
 *.pth
 *.pt
-!checkpoints/*.pt
+checkpoints/
 
-# Data files (too large for Git)
-data/dataset/
+# Data files (too large for Git and potentially sensitive medical data)
+data/
 !data/coordenadas/
 
 # Logs and temporary files
