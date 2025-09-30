@@ -1,0 +1,428 @@
+# Configuración EfficientNet-B1 con mejoras geométricas
+# Pipeline 4-phase optimizado para super-precisión (<6.0px target)
+# Basado en resultados exitosos: 7.23px ± 3.66px
+
+# Configuración del modelo EfficientNet-B1
+model:
+  architecture: "efficientnet_b1"
+  num_landmarks: 15
+  pretrained: true
+  dropout_rate: 0.5
+
+  # Coordinate Attention (153,680 params)
+  use_coordinate_attention: true
+  attention_reduction: 32
+
+  # Model characteristics
+  backbone_features: 1280  # vs 512 ResNet-18
+  total_parameters: 7800000  # ~7.8M vs 11.9M ResNet-18
+
+# Configuración de datos
+data:
+  batch_size: 8  # Optimal for GPU memory with EfficientNet
+  image_size: 224
+  num_workers: 4
+  pin_memory: true
+
+  # Paths
+  coordenadas_path: "data/coordenadas/coordenadas_maestro.csv"
+  dataset_path: "data/dataset"
+
+  # División de datos (seed 42 para reproducibilidad)
+  train_split: 0.7
+  val_split: 0.15
+  test_split: 0.15
+  random_seed: 42
+
+# Configuración de augmentación (básica para Phase 1-2)
+augmentation:
+  horizontal_flip: 0.7
+  rotation: 15
+  brightness: 0.4
+  contrast: 0.4
+  color_jitter: 0.1
+  gaussian_blur: 0.1
+
+  # Medical augmentation (Phase 3+)
+  use_medical_augmentation: false  # Enable después de validar baseline
+  medical_augmentation:
+    breathing_simulation:
+      enabled: true
+      expansion_range: [0.97, 1.03]
+      probability: 0.5
+
+    positioning_variation:
+      enabled: true
+      angle_range: [-2, 2]  # Más conservador que ±15°
+      translation_range: [-0.02, 0.02]
+      probability: 0.4
+
+    elastic_deformation:
+      enabled: true
+      alpha_range: [100, 200]
+      sigma: 20
+      probability: 0.3
+
+    pathology_aware:
+      enabled: true
+      # Diferenciado por categoría médica
+
+    validate_constraints: true
+    constraint_tolerance: 0.20
+
+# Configuración de pérdida (idéntica a ResNet para comparación)
+loss:
+  type: "wing"  # Phase 1-2
+  wing_omega: 10.0
+  wing_epsilon: 2.0
+
+  # Phase 3: Symmetry
+  symmetry_weight: 0.3
+
+  # Phase 4: Complete
+  distance_weight: 0.2
+
+  use_adaptive_wing: false
+  landmark_weights: null
+
+# PHASE 1: Freeze Backbone + MSE Loss
+training_phase1:
+  name: "Freeze Backbone Baseline"
+  epochs: 20  # +5 vs ResNet (EfficientNet converge más lento)
+  learning_rate: 0.0005  # 50% de ResNet LR
+  weight_decay: 0.0001
+  optimizer: "adam"
+  scheduler: "step"
+  scheduler_params:
+    step_size: 7
+    gamma: 0.5
+
+  loss_type: "mse"  # Simple MSE para Phase 1
+
+  early_stopping:
+    patience: 10
+    min_delta: 0.001
+    monitor: "val_pixel_error"
+
+  checkpoint_name: "efficientnet_phase1_best.pt"
+  expected_error: 47.87  # px (basado en log previo)
+
+# PHASE 2: Fine-tuning + Wing Loss
+training_phase2:
+  name: "Fine-tuning Wing Loss"
+  epochs: 70  # +10 vs ResNet
+
+  # Learning rates diferenciados (50% de ResNet)
+  backbone_lr: 0.00001  # vs 0.00002 ResNet
+  head_lr: 0.0001       # vs 0.0002 ResNet
+
+  weight_decay: 0.00005
+  optimizer: "adam"
+  scheduler: "cosine_annealing"
+  min_lr: 0.000001  # Más bajo para mejor convergencia
+
+  loss_type: "wing"
+
+  early_stopping:
+    patience: 15
+    min_delta: 0.0005
+    monitor: "val_pixel_error"
+
+  checkpoint_base: "efficientnet_phase1_best.pt"
+  checkpoint_target: "efficientnet_phase2_best.pt"
+  expected_error: 8.20  # px (basado en log previo)
+
+# PHASE 3: Wing + Symmetry Loss
+training_phase3:
+  name: "Symmetry-Aware Loss"
+  epochs: 80  # +10 vs ResNet
+
+  # Mantener LRs exitosos de Phase 2
+  backbone_lr: 0.00001
+  head_lr: 0.0001
+
+  weight_decay: 0.00005
+  optimizer: "adam"
+  scheduler: "cosine_annealing"
+  min_lr: 0.000001
+
+  loss_type: "wing_symmetry"
+  symmetry_weight: 0.3
+
+  early_stopping:
+    patience: 15
+    min_delta: 0.0005
+    monitor: "val_pixel_error"
+
+  checkpoint_base: "efficientnet_phase2_best.pt"
+  checkpoint_target: "efficientnet_phase3_best.pt"
+  expected_error: 7.65  # px (basado en log previo)
+
+# PHASE 4: Complete Loss (Wing + Symmetry + Distance)
+training_phase4:
+  name: "Complete Geometric Loss"
+  epochs: 80  # +10 vs ResNet
+
+  # Mantener configuración exitosa
+  backbone_lr: 0.00001
+  head_lr: 0.0001
+
+  weight_decay: 0.00005
+  optimizer: "adam"
+  scheduler: "cosine_annealing_warm_restarts"
+  scheduler_params:
+    T_0: 20
+    T_mult: 2
+    eta_min: 0.000001
+
+  loss_type: "complete_landmark"
+  symmetry_weight: 0.3
+  distance_weight: 0.2
+
+  early_stopping:
+    patience: 15
+    min_delta: 0.0003  # Más estricto para phase final
+    monitor: "val_pixel_error"
+
+  checkpoint_base: "efficientnet_phase3_best.pt"
+  checkpoint_target: "efficientnet_phase4_best.pt"
+  expected_error: 7.12  # px validation (7.23px test)
+  target_error: 6.50    # NEW TARGET con medical augmentation
+
+# Configuración de logging
+logging:
+  log_dir: "logs/efficientnet"
+  experiment_name: "efficientnet_b1_4phase"
+  log_interval: 10
+  save_top_k: 3
+
+  # Logging detallado
+  log_attention_weights: true
+  log_detailed_metrics: true
+  log_geometric_metrics: true
+
+  # Tensorboard
+  use_tensorboard: true
+  tensorboard_dir: "runs/efficientnet"
+
+# Configuración de evaluación
+evaluation:
+  metrics:
+    # Métricas estándar
+    - "rmse"
+    - "mae"
+    - "pixel_error"
+    - "pixel_error_std"
+
+    # Métricas geométricas
+    - "symmetry_consistency"
+    - "anatomical_validity"
+    - "constraint_violations"
+    - "cardiothoracic_ratio"
+    - "distance_preservation"
+
+  # Clinical thresholds
+  clinical_thresholds:
+    research_excellence: 5.0    # Sub-pixel precision
+    clinical_excellence: 8.5     # ✓ ACHIEVED (7.23px)
+    optimistic_target: 8.0       # ✓ ACHIEVED (7.23px)
+    new_target: 6.5              # NEW TARGET
+    super_precision: 6.0         # ULTIMATE GOAL
+
+  # Validación geométrica
+  geometric_validation:
+    enabled: true
+    validity_threshold: 0.7
+
+  image_size_for_pixels: 224
+
+# Configuración de checkpoints
+checkpoints:
+  save_dir: "checkpoints/efficientnet"
+  save_best: true
+  save_latest: true
+  save_optimizer: true
+  save_scheduler: true
+
+  # Nomenclatura por fase
+  phase1_name: "efficientnet_phase1_best.pt"
+  phase2_name: "efficientnet_phase2_best.pt"
+  phase3_name: "efficientnet_phase3_best.pt"
+  phase4_name: "efficientnet_phase4_best.pt"
+
+# Configuración de dispositivo
+device:
+  use_gpu: true
+  gpu_id: 0
+  mixed_precision: false  # Deshabilitar para estabilidad
+
+# Reproducibilidad
+reproducibility:
+  seed: 42
+  deterministic: true
+  benchmark: false
+
+# Análisis geométrico (idéntico a ResNet)
+geometric_analysis:
+  # Pares simétricos bilaterales
+  symmetric_pairs:
+    - [2, 3]   # Ápices pulmonares
+    - [4, 5]   # Hilios
+    - [6, 7]   # Bases pulmonares
+    - [11, 12] # Bordes superiores
+    - [13, 14] # Senos costofrénicos
+
+  # Eje mediastinal
+  mediastinal_landmarks: [0, 1, 8, 9, 10]
+
+  # Distancias críticas
+  critical_distances:
+    - [0, 1]   # Mediastino superior-inferior
+    - [8, 9]   # Eje central medio
+    - [2, 3]   # Ancho torácico superior
+    - [4, 5]   # Ancho torácico medio
+    - [6, 7]   # Ancho torácico inferior
+
+  # Umbrales anatómicos
+  thresholds:
+    symmetry_tolerance: 0.15
+    mediastinal_deviation_max: 0.1
+    vertical_order_violation_max: 0.05
+
+  # Pesos por importancia anatómica
+  landmark_importance_weights:
+    - 1.5  # 0: Mediastino superior
+    - 1.5  # 1: Mediastino inferior
+    - 1.2  # 2: Ápice izquierdo
+    - 1.2  # 3: Ápice derecho
+    - 1.3  # 4: Hilio izquierdo
+    - 1.3  # 5: Hilio derecho
+    - 1.1  # 6: Base izquierda
+    - 1.1  # 7: Base derecha
+    - 1.5  # 8: Centro medio
+    - 1.4  # 9: Centro inferior
+    - 1.4  # 10: Centro superior
+    - 1.0  # 11: Borde izquierdo
+    - 1.0  # 12: Borde derecho
+    - 2.0  # 13: Landmark problemático
+    - 2.0  # 14: Landmark problemático
+
+# Configuración de validación
+validation:
+  interval: 1  # Validar cada época
+  metrics_to_track:
+    - "val_loss"
+    - "val_pixel_error_mean"
+    - "val_pixel_error_std"
+    - "val_symmetry_consistency"
+    - "val_anatomical_validity"
+
+  visualize_predictions: true
+  visualize_interval: 10
+  max_visualizations: 8
+
+# Configuración de testing final
+testing:
+  # Comparación con baseline
+  baseline_comparison: true
+  baseline_model: "ResNet-18"
+  baseline_error: 8.13  # ResNet-18 Phase 4 result
+  efficientnet_baseline: 7.23  # EfficientNet Phase 4 previous
+  target_error: 6.50  # With medical augmentation
+  super_target: 6.00  # Ultimate goal
+
+  # Análisis por categoría
+  category_analysis: true
+  categories: ["COVID", "Normal", "Viral_Pneumonia"]
+
+  # Análisis por landmark
+  landmark_analysis: true
+  problematic_landmarks: [13, 14]
+
+  # Validación geométrica exhaustiva
+  geometric_validation:
+    comprehensive: true
+    generate_reports: true
+    save_detailed_analysis: true
+
+  # Statistical significance testing
+  statistical_tests:
+    - "paired_t_test"
+    - "wilcoxon_signed_rank"
+  significance_level: 0.05
+
+# Resumen de fases y resultados esperados
+phases_summary:
+  phase1:
+    name: "Freeze Backbone + MSE"
+    epochs: 20
+    expected_result: "47.87 px"
+    status: "documented"
+
+  phase2:
+    name: "Fine-tuning + Wing Loss"
+    epochs: 70
+    expected_result: "8.20 px"
+    improvement_vs_phase1: "39.67 px"
+    status: "documented"
+
+  phase3:
+    name: "Wing + Symmetry Loss"
+    epochs: 80
+    expected_result: "7.65 px"
+    clinical_target: "8.5 px"
+    target_achieved: true
+    status: "documented"
+
+  phase4:
+    name: "Complete Loss"
+    epochs: 80
+    expected_result: "7.12 px (val) / 7.23 px (test)"
+    optimistic_target: "8.0 px"
+    target_achieved: true
+    improvement_vs_resnet: "11.2%"
+    statistical_significance: "p<0.05"
+    status: "documented"
+
+  phase5_future:
+    name: "Medical Augmentation"
+    expected_result: "6.5-7.0 px"
+    improvement: "3-10%"
+    new_target: "6.0 px"
+    status: "planned"
+
+# Notas importantes
+notes:
+  efficientnet_vs_resnet:
+    - "EfficientNet-B1: 7.23 ± 3.66 px"
+    - "ResNet-18: 8.13 ± 3.74 px"
+    - "Mejora: 11.2% estadísticamente significativa"
+    - "Parámetros: 7.8M vs 11.9M (32% menos)"
+    - "Features: 1280 vs 512 (2.5x más capacidad)"
+
+  learning_rates:
+    - "EfficientNet requiere LRs 50% menores que ResNet"
+    - "Backbone LR: 0.00001 vs 0.00002"
+    - "Head LR: 0.0001 vs 0.0002"
+    - "Razón: Arquitectura más eficiente y sensible"
+
+  convergence:
+    - "EfficientNet converge ~20% más lento"
+    - "Requiere +10-15 épocas por fase"
+    - "Beneficia de cosine annealing warm restarts"
+
+  medical_augmentation:
+    - "Implementar después de validar Phase 4 baseline"
+    - "Expected improvement: 5-10%"
+    - "Target final: <6.0px (super-precisión)"
+    - "Breathing simulation es más efectivo"
+
+  checkpoints:
+    - "Phase 1: 37.9 MB"
+    - "Phase 2-4: ~90 MB cada uno"
+    - "Total: ~308 MB para pipeline completo"
+
+  gpu_memory:
+    - "Batch size 8 óptimo para 8GB VRAM"
+    - "EfficientNet usa ~30% más memoria que ResNet"
+    - "Monitor memory usage si batch size > 8"
