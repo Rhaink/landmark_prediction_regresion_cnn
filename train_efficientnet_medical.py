@@ -52,8 +52,10 @@ class CompleteLandmarkLoss(nn.Module):
         super().__init__()
 
         self.wing_loss = WingLoss(omega=wing_omega, epsilon=wing_epsilon)
-        self.symmetry_loss = SymmetryLoss()
-        self.distance_loss = DistancePreservationLoss()
+        # CRITICAL FIX: Initialize with weight=1.0 to avoid double weighting
+        # External weights (0.3, 0.2) are applied in forward(), so internal weights must be 1.0
+        self.symmetry_loss = SymmetryLoss(symmetry_weight=1.0, use_mediastinal_axis=True)
+        self.distance_loss = DistancePreservationLoss(distance_weight=1.0)
 
         self.symmetry_weight = symmetry_weight
         self.distance_weight = distance_weight
@@ -162,12 +164,12 @@ class EfficientNetMedicalTrainer:
             verbose=False
         )
 
-        val_transform = get_medical_transforms(
+        # CRITICAL FIX: Use basic transforms for validation (same as Phase 4)
+        # This ensures consistent preprocessing between Phase 4 and Phase 5 validation
+        from src.data.transforms import get_transforms
+        val_transform = get_transforms(
             image_size=(224, 224),
-            is_training=False,
-            enable_medical_aug=False,
-            validation_tolerance=0.20,
-            verbose=False
+            is_training=False  # No augmentation, just resize + normalize
         )
 
         # Create datasets
