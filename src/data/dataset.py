@@ -167,7 +167,11 @@ class LandmarkDataset(Dataset):
 
             # Aplicar transformaciones si están disponibles
             if self.transform is not None:
-                image_tensor, landmarks_tensor = self.transform(image, landmarks)
+                # Check if transform supports category parameter (medical transforms)
+                if hasattr(self.transform, '__call__') and 'category' in self.transform.__call__.__code__.co_varnames:
+                    image_tensor, landmarks_tensor = self.transform(image, landmarks, category=sample['category'])
+                else:
+                    image_tensor, landmarks_tensor = self.transform(image, landmarks)
             else:
                 # Transformación básica sin augmentation
                 basic_transform = get_transforms(is_training=False)
@@ -276,6 +280,7 @@ def create_dataloaders(annotations_file: str,
                       batch_size: int = 32,
                       num_workers: int = 4,
                       pin_memory: bool = True,
+                      use_medical_transforms: bool = False,
                       **split_kwargs) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """
     Crear DataLoaders para entrenamiento, validación y prueba
@@ -286,6 +291,7 @@ def create_dataloaders(annotations_file: str,
         batch_size: Tamaño del batch
         num_workers: Número de workers para carga paralela
         pin_memory: Si usar pin_memory para GPU
+        use_medical_transforms: Si usar transformaciones médicas avanzadas
         **split_kwargs: Argumentos para create_data_splits
 
     Returns:
@@ -295,8 +301,13 @@ def create_dataloaders(annotations_file: str,
     train_indices, val_indices, test_indices = create_data_splits(annotations_file, **split_kwargs)
 
     # Crear transformaciones
-    train_transform = get_transforms(image_size=(224, 224), is_training=True)
-    val_transform = get_transforms(image_size=(224, 224), is_training=False)
+    if use_medical_transforms:
+        from .medical_transforms import get_medical_transforms
+        train_transform = get_medical_transforms(image_size=(224, 224), is_training=True, enable_medical_aug=True)
+        val_transform = get_medical_transforms(image_size=(224, 224), is_training=False, enable_medical_aug=False)
+    else:
+        train_transform = get_transforms(image_size=(224, 224), is_training=True)
+        val_transform = get_transforms(image_size=(224, 224), is_training=False)
 
     # Crear datasets
     train_dataset = LandmarkDataset(

@@ -43,8 +43,8 @@ augmentation:
   color_jitter: 0.1
   gaussian_blur: 0.1
 
-  # Medical augmentation (Phase 3+)
-  use_medical_augmentation: false  # Enable después de validar baseline
+  # Medical augmentation (Phase 5)
+  use_medical_augmentation: true  # ✓ ENABLED for Phase 5
   medical_augmentation:
     breathing_simulation:
       enabled: true
@@ -384,12 +384,27 @@ phases_summary:
     statistical_significance: "p<0.05"
     status: "documented"
 
-  phase5_future:
+  phase5:
     name: "Medical Augmentation"
-    expected_result: "6.5-7.0 px"
-    improvement: "3-10%"
-    new_target: "6.0 px"
-    status: "planned"
+    epochs: 80  # Same as Phase 4
+    backbone_lr: 0.00001  # Same as Phase 4
+    head_lr: 0.0001
+    loss_type: "complete_landmark"
+    expected_result: "6.0-6.5 px"
+    improvement: "5-15% over Phase 4 (7.23px)"
+    target_error: 6.0  # Super-precision target
+    status: "ready"  # ✓ IMPLEMENTED
+
+    # Medical augmentation features
+    augmentation_features:
+      - "Breathing simulation (0.5 probability)"
+      - "Patient positioning ±2° (0.4 probability)"
+      - "Elastic deformation (0.3 probability)"
+      - "Pathology-aware weighting"
+      - "Anatomical constraint validation"
+      - "Medical intensity augmentation (0.6 probability)"
+
+    training_script: "train_efficientnet_medical.py"
 
 # Notas importantes
 notes:

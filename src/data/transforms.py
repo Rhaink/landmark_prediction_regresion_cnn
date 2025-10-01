@@ -91,9 +91,9 @@ class LandmarkTransforms:
             image = cv2.flip(image, 1)  # Flip horizontal
             landmarks = self._flip_landmarks_horizontal(landmarks, width)
 
-        # Rotación ligera (±10 grados)
+        # Rotación ligera (±2 grados - más apropiado para imágenes médicas)
         if random.random() < 0.3:
-            angle = random.uniform(-10, 10)
+            angle = random.uniform(-2, 2)
             image, landmarks = self._rotate_image_and_landmarks(image, landmarks, angle, width, height)
 
         # Ajustes de brillo y contraste (no afectan landmarks)
@@ -244,3 +244,34 @@ def get_transforms(image_size: Tuple[int, int] = (224, 224), is_training: bool =
         Objeto LandmarkTransforms configurado
     """
     return LandmarkTransforms(image_size=image_size, is_training=is_training)
+
+
+def get_medical_transforms(image_size: Tuple[int, int] = (224, 224),
+                          is_training: bool = True,
+                          enable_medical_aug: bool = True,
+                          validation_tolerance: float = 0.20,
+                          verbose: bool = False):
+    """
+    Factory function para obtener transformaciones médicas avanzadas
+
+    Para usar medical transforms, importar desde medical_transforms.py
+    Esta función es un wrapper para compatibilidad
+
+    Args:
+        image_size: Tamaño objetivo de imagen
+        is_training: Si aplicar data augmentation
+        enable_medical_aug: Habilitar augmentación médica
+        validation_tolerance: Tolerancia para validación anatómica
+        verbose: Imprimir warnings de validación
+
+    Returns:
+        Objeto MedicalLandmarkTransforms configurado
+    """
+    from .medical_transforms import get_medical_transforms as _get_medical_transforms
+    return _get_medical_transforms(
+        image_size=image_size,
+        is_training=is_training,
+        enable_medical_aug=enable_medical_aug,
+        validation_tolerance=validation_tolerance,
+        verbose=verbose
+    )

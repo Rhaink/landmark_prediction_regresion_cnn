@@ -776,6 +776,53 @@ def visualize_efficientnet(checkpoint_path: str = None):
     return result == 0
 
 
+def train_medical():
+    """
+    Entrenar EfficientNet-B1 con Medical Augmentation (Phase 5)
+
+    Target: <6.0px mean error (mejora desde 7.23px baseline)
+
+    Features:
+    - Breathing simulation
+    - Patient positioning variation (±2°)
+    - Elastic deformation
+    - Pathology-aware augmentation
+    - Anatomical constraint validation
+
+    Returns:
+        True si exitoso
+    """
+    print("\n🏥 Entrenando EfficientNet-B1 con Medical Augmentation...")
+    print("   Phase 5: Super-precision target <6.0px")
+
+    # Verificar que existe Phase 4 checkpoint
+    phase4_checkpoint = "checkpoints/efficientnet/efficientnet_phase4_best.pt"
+
+    if not os.path.exists(phase4_checkpoint):
+        print(f"❌ Checkpoint Phase 4 no encontrado: {phase4_checkpoint}")
+        print("   Debes entrenar Phase 4 primero:")
+        print("   python main.py train_efficientnet --phase 4")
+        return False
+
+    print(f"✓ Checkpoint Phase 4 encontrado: {phase4_checkpoint}")
+    print("\n🧬 Medical Augmentation Features:")
+    print("  • Breathing simulation (diaphragm movement)")
+    print("  • Patient positioning ±2° (realistic variation)")
+    print("  • Elastic deformation (tissue simulation)")
+    print("  • Pathology-aware weighting (COVID/Normal/Viral)")
+    print("  • Anatomical constraint validation")
+    print("  • Medical intensity augmentation")
+
+    # Ejecutar entrenamiento
+    result = os.system(f"python train_efficientnet_medical.py --checkpoint {phase4_checkpoint}")
+
+    if result == 0:
+        print("\n✓ Entrenamiento completado!")
+        print("  Checkpoint guardado: checkpoints/efficientnet/efficientnet_medical_best.pt")
+
+    return result == 0
+
+
 def main():
     """Función principal"""
     parser = argparse.ArgumentParser(description='Proyecto de regresión de landmarks')
@@ -807,7 +854,8 @@ def main():
         # Comandos EfficientNet (NUEVOS)
         'train_efficientnet',      # Entrenar EfficientNet-B1 (pipeline 4-phase completo)
         'evaluate_efficientnet',   # Comparar EfficientNet vs ResNet estadísticamente
-        'visualize_efficientnet'   # Visualizar predicciones de EfficientNet
+        'visualize_efficientnet',  # Visualizar predicciones de EfficientNet
+        'train_medical'            # Entrenar con Medical Augmentation (Phase 5) - Target <6.0px
     ], help='Comando a ejecutar')
 
     parser.add_argument('--checkpoint', type=str,
@@ -915,6 +963,10 @@ def main():
     elif args.command == 'visualize_efficientnet':
         checkpoint = args.checkpoint or 'checkpoints/efficientnet/efficientnet_phase4_best.pt'
         if not visualize_efficientnet(checkpoint):
+            sys.exit(1)
+
+    elif args.command == 'train_medical':
+        if not train_medical():
             sys.exit(1)
 
     print("\n✅ Comando ejecutado exitosamente!")
