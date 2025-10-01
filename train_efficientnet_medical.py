@@ -158,7 +158,7 @@ class EfficientNetMedicalTrainer:
             image_size=(224, 224),
             is_training=True,
             enable_medical_aug=True,  # ENABLE MEDICAL AUGMENTATION
-            validation_tolerance=0.20,
+            validation_tolerance=0.50,  # Increased from 0.20 to 0.50 (50%) - original data has inherent asymmetry
             verbose=False
         )
 
@@ -193,11 +193,13 @@ class EfficientNetMedicalTrainer:
         )
 
         # Create dataloaders
+        # Note: Using num_workers=0 to properly collect augmentation statistics
+        # With multiprocessing, stats are isolated in worker processes
         self.train_loader = DataLoader(
             train_dataset,
             batch_size=self.config['data']['batch_size'],
             shuffle=True,
-            num_workers=self.config['data']['num_workers'],
+            num_workers=0,  # Set to 0 for statistics collection (was: self.config['data']['num_workers'])
             pin_memory=self.config['data']['pin_memory'],
             drop_last=True
         )
@@ -348,7 +350,14 @@ class EfficientNetMedicalTrainer:
             pred_pixels = predictions * 224
             target_pixels = targets * 224
 
-            errors = torch.sqrt(torch.sum((pred_pixels - target_pixels) ** 2, dim=1))
+            # Reshape to (batch, 15 landmarks, 2 coordinates)
+            pred_reshaped = pred_pixels.view(-1, 15, 2)
+            target_reshaped = target_pixels.view(-1, 15, 2)
+
+            # Compute Euclidean distance per landmark, then mean across landmarks
+            errors_per_landmark = torch.sqrt(torch.sum((pred_reshaped - target_reshaped) ** 2, dim=2))  # (batch, 15)
+            errors = torch.mean(errors_per_landmark, dim=1)  # (batch,) - mean error per sample
+
             all_errors.extend(errors.cpu().numpy())
 
         # Compute metrics

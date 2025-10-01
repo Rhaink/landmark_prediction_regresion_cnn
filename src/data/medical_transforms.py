@@ -199,8 +199,9 @@ class BreathingSimulation:
         Returns:
             (transformed_image, transformed_landmarks)
         """
-        if random.random() > self.probability:
-            return image, landmarks
+        # Probability check removed - controlled by outer MedicalLandmarkTransforms
+        # if random.random() > self.probability:
+        #     return image, landmarks
 
         # Random expansion factor
         expansion_factor = random.uniform(*self.expansion_range)
@@ -308,8 +309,9 @@ class PatientPositioningVariation:
         Returns:
             (transformed_image, transformed_landmarks)
         """
-        if random.random() > self.probability:
-            return image, landmarks
+        # Probability check removed - controlled by outer MedicalLandmarkTransforms
+        # if random.random() > self.probability:
+        #     return image, landmarks
 
         # Random rotation angle (small!)
         angle = random.uniform(*self.angle_range)
@@ -388,8 +390,9 @@ class ElasticDeformation:
         Returns:
             (transformed_image, transformed_landmarks)
         """
-        if random.random() > self.probability:
-            return image, landmarks
+        # Probability check removed - controlled by outer MedicalLandmarkTransforms
+        # if random.random() > self.probability:
+        #     return image, landmarks
 
         alpha = random.uniform(*self.alpha_range)
 
@@ -511,8 +514,9 @@ class MedicalIntensityAugmentation:
         Returns:
             Transformed image (landmarks unchanged)
         """
-        if random.random() > self.probability:
-            return image
+        # Probability check removed - controlled by outer MedicalLandmarkTransforms
+        # if random.random() > self.probability:
+        #     return image
 
         image_transformed = image.copy().astype(np.float32)
 
