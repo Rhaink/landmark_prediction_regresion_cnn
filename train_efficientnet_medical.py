@@ -356,11 +356,13 @@ class EfficientNetMedicalTrainer:
             pred_reshaped = pred_pixels.view(-1, 15, 2)
             target_reshaped = target_pixels.view(-1, 15, 2)
 
-            # Compute Euclidean distance per landmark, then mean across landmarks
+            # CRITICAL FIX: Use same averaging as Phase 4 (global mean, not per-sample mean)
+            # Phase 4: mean(all_distances) - averages across ALL landmarks in batch
+            # Phase 5 was: mean(mean(distances_per_sample)) - averages twice
             errors_per_landmark = torch.sqrt(torch.sum((pred_reshaped - target_reshaped) ** 2, dim=2))  # (batch, 15)
-            errors = torch.mean(errors_per_landmark, dim=1)  # (batch,) - mean error per sample
 
-            all_errors.extend(errors.cpu().numpy())
+            # Flatten to get all landmark errors and collect them
+            all_errors.extend(errors_per_landmark.flatten().cpu().numpy())
 
         # Compute metrics
         all_errors = np.array(all_errors)
