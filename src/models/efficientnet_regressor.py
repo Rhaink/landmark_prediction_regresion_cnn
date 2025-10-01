@@ -355,8 +355,26 @@ class EfficientNetLandmarkRegressor(nn.Module):
             attention_reduction=model_config.get("attention_reduction", 32),
         )
 
-        # Cargar estado del modelo
-        model.load_state_dict(checkpoint["model_state_dict"])
+        # Cargar estado del modelo con mapeo de claves
+        state_dict = checkpoint["model_state_dict"]
+
+        # Verificar si necesitamos mapear claves (checkpoint antiguo vs nuevo)
+        # Checkpoint antiguo tiene "backbone.X", nuevo código espera "backbone_conv.X"
+        if any(k.startswith("backbone.") for k in state_dict.keys()):
+            # Mapear claves del checkpoint antiguo al nuevo formato
+            new_state_dict = {}
+            for k, v in state_dict.items():
+                if k.startswith("backbone."):
+                    # Renombrar backbone. -> backbone_conv.
+                    new_key = k.replace("backbone.", "backbone_conv.", 1)
+                    new_state_dict[new_key] = v
+                else:
+                    new_state_dict[k] = v
+            state_dict = new_state_dict
+            print("  ℹ️  Mapeando claves del checkpoint antiguo al nuevo formato")
+
+        # Cargar con strict=False para permitir claves faltantes en num_batches_tracked
+        model.load_state_dict(state_dict, strict=False)
 
         print(f"✓ EfficientNet modelo cargado desde: {filepath}")
         print(f"✓ Época: {checkpoint['epoch']}")

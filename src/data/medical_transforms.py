@@ -530,8 +530,8 @@ class MedicalIntensityAugmentation:
         # Gamma correction (simulates exposure variations)
         if random.random() < 0.3:
             gamma = random.uniform(*self.gamma_range)
-            # Normalize to [0, 1]
-            img_normalized = image_transformed / 255.0
+            # Normalize to [0, 1] and clip to avoid negative values
+            img_normalized = np.clip(image_transformed / 255.0, 0, 1)
             # Apply gamma
             img_gamma = np.power(img_normalized, gamma)
             # Back to [0, 255]

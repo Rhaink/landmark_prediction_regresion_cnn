@@ -71,11 +71,11 @@ class CompleteLandmarkLoss(nn.Module):
         # Wing loss
         wing = self.wing_loss(predictions, targets)
 
-        # Symmetry loss
-        symmetry = self.symmetry_loss(predictions, image_size)
+        # Symmetry loss (takes only landmarks, no image_size)
+        symmetry = self.symmetry_loss(predictions)
 
-        # Distance preservation loss
-        distance = self.distance_loss(predictions, targets, image_size)
+        # Distance preservation loss (takes predictions and targets, no image_size)
+        distance = self.distance_loss(predictions, targets)
 
         # Total loss
         total_loss = wing + self.symmetry_weight * symmetry + self.distance_weight * distance
@@ -122,8 +122,15 @@ class EfficientNetMedicalTrainer:
             checkpoint_path, device=self.device
         )
 
-        print(f"✓ Loaded Phase 4 model (epoch {checkpoint['epoch']}, "
-              f"best val error: {checkpoint.get('best_val_error', 'N/A'):.4f} px)")
+        # Move model to device
+        self.model = self.model.to(self.device)
+
+        best_val_error = checkpoint.get('best_val_error', checkpoint.get('metrics', {}).get('best_pixel_error', 'N/A'))
+        if isinstance(best_val_error, (int, float)):
+            print(f"✓ Loaded Phase 4 model (epoch {checkpoint['epoch']}, "
+                  f"best val error: {best_val_error:.4f} px)")
+        else:
+            print(f"✓ Loaded Phase 4 model (epoch {checkpoint['epoch']})")
 
         # Create dataloaders with MEDICAL AUGMENTATION
         self._create_dataloaders()
